@@ -50,12 +50,13 @@ finger_counter.py
 hand_tracking_basics.py
 assets/fingers/           finger-counter overlay images
 assets/toolbar/           painter toolbar images
+tests/                    scripted-hand test for the painter
 ```
 
 ## Status
 
 - All seven scripts run end to end in a headless harness (fake camera frames, stubbed display, mouse and audio).
-- The painter's select, draw and clear logic is covered by a scripted-hand test.
+- The painter's select, draw and clear logic is covered by a scripted-hand test: `python tests/test_virtual_painter.py`.
 - Which physical hand MediaPipe calls "Left" or "Right" on the mirrored frame has not been re-checked on a live webcam since the shared-module refactor; if the painter's hands feel swapped, swap the two `hand["type"]` checks in `virtual_painter.py`.
 
 ## License
