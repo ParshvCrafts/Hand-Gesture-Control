@@ -61,7 +61,7 @@ while True:
     cv2.putText(img, f"Volume: {int(volPer)} %", (10, 100), cv2.FONT_HERSHEY_PLAIN, 2, (0, 255, 0), 2)
 
     cTime = time.time()
-    fps = 1 / (cTime - pTime)
+    fps = 1 / (cTime - pTime) if cTime > pTime else 0
     pTime = cTime
     cv2.putText(img, f"FPS: {int(fps)}", (5, 50), cv2.FONT_HERSHEY_PLAIN, 2, (0, 255, 0), 2) # Displaying the fps on the image with scale 3, purple color and thickness 3
     cv2.imshow("Image", img)

@@ -216,7 +216,7 @@ while True:
 
     # Calculate and display FPS
     cTime = time.time()
-    fps = 1 / (cTime - pTime)
+    fps = 1 / (cTime - pTime) if cTime > pTime else 0
     pTime = cTime
     cv2.putText(img, f"FPS: {int(fps)}", (10, hCam - 10), cv2.FONT_HERSHEY_PLAIN, 2, (255, 255, 255), 2)
 

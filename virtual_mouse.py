@@ -79,7 +79,7 @@ while True:
 
     # Calculate the frame rate
     current_frame = time.time()
-    fps = 1 / (current_frame - previous_frame)
+    fps = 1 / (current_frame - previous_frame) if current_frame > previous_frame else 0
     previous_frame = current_frame
 
     # Display the frame rate

@@ -80,7 +80,7 @@ def main():
             print(f"Hand detected: {handType}")
 
         cTime = time.time() # Calculating the frames per second which is the time taken to process each frame
-        fps = 1 / (cTime - pTime)
+        fps = 1 / (cTime - pTime) if cTime > pTime else 0
         pTime = cTime # Previous time started as 0 and then updated to the current time
         
         cv2.putText(img, str(int(fps)), (10, 70), cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 255), 3) # Displaying the fps on the image with scale 3, purple color and thickness 3
