@@ -7,9 +7,8 @@ import hand_tracking_module as htm
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 folderPath = os.path.join(script_dir, "assets", "toolbar")
-myList = os.listdir(folderPath)
+myList = sorted(os.listdir(folderPath))  # 1-3 = red/blue/green, 4 = eraser
 overlayList = []
-print(myList)
 
 for imPath in myList:
     image = cv2.imread(os.path.join(folderPath, imPath))
@@ -24,6 +23,8 @@ cap.set(4, 720)
 
 # Get actual camera resolution
 ret, test_frame = cap.read()
+if not ret:
+    raise SystemExit("No frame from webcam 0: check that a camera is connected and not in use by another app.")
 frameHeight, frameWidth, _ = test_frame.shape
 
 # Resize all overlay images to match camera width while preserving aspect ratio
@@ -74,7 +75,9 @@ imgCanvas = np.zeros((frameHeight, frameWidth, 3), dtype=np.uint8)
 while True:
     # Reading the frame from the camera
     success, img = cap.read()
-    
+    if not success:
+        break
+
     # Flipping the frame horizontally
     img = cv2.flip(img, 1)
 
@@ -82,19 +85,16 @@ while True:
     img = detector.findHands(img, draw=False)
     allHands = detector.findAllHands(img, draw=False)
 
-    if allHands:
-        hand = allHands[0]  # first detected hand drives the canvas
+    for handNo, hand in enumerate(allHands):  # both hands can act in the same frame
         lmList = hand["lmList"]
-        # MediaPipe label on the mirrored frame: "Right" paints, "Left" clears (same mapping as before the
-        # module port). MediaPipe assumes mirrored input, so this should be the physical hand; not live-verified.
+        # MediaPipe label on the mirrored frame = physical hand: "Right" paints, "Left" clears.
         if hand["type"] == "Right":
             # Index finger tip and middle finger tip
             x1, y1 = lmList[8]
             x2, y2 = lmList[12]
 
             # Check which fingers are up
-            fingers = detector.fingersUp(0)
-            # print(fingers)
+            fingers = detector.fingersUp(handNo)
 
             # Selection Mode - If index and middle finger are up
             if fingers[1] and fingers[2]:
@@ -151,7 +151,7 @@ while True:
         if hand["type"] == "Left":  # left hand touching the toolbar clears the canvas
             x1, y1 = lmList[8]
             x2, y2 = lmList[12]
-            fingers = detector.fingersUp(0)
+            fingers = detector.fingersUp(handNo)
 
             if fingers[1] and fingers[2]:
                 cv2.rectangle(img, (x1, y1 - 15), (x2, y2 + 15), draw_color, cv2.FILLED)
@@ -159,7 +159,7 @@ while True:
                 cv2.putText(img, "Clear", (7, 85), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 255), 2)
                 if y1 < headerHeight:
                     # Check which button the finger is over
-                    for x_start, x_end, idx in buttonPositions:
+                    for x_start, x_end, _ in buttonPositions:  # not idx: clearing must keep the selected tool
                         if x_start < x1 < x_end:
                             imgCanvas = np.zeros((frameHeight, frameWidth, 3), dtype=np.uint8)
                             xp, yp = 0, 0

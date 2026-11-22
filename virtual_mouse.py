@@ -13,6 +13,10 @@ wCam, hCam = 1200, 1080
 cap = cv2.VideoCapture(0)
 cap.set(3, wCam)
 cap.set(4, hCam)
+ok, probe = cap.read()  # the camera may not honour the requested size: map gestures over the real frame
+if not ok:
+    raise SystemExit("No frame from webcam 0: check that a camera is connected and not in use by another app.")
+hCam, wCam = probe.shape[:2]
 
 # Initialize the hand detector
 detector = htm.HandDetector(max_num_hands=1)
@@ -63,7 +67,7 @@ while True:
                 current_y = prev_y + (index_tip_y - prev_y) / smooth
 
                 # Move the mouse
-                autopy.mouse.move(screen_width - current_x, current_y)
+                autopy.mouse.move(min(screen_width - current_x, screen_width - 1), min(current_y, screen_height - 1))
                 cv2.circle(img, (index_tip[0], index_tip[1]), 15, (255, 0, 255), cv2.FILLED)
                 prev_x, prev_y = current_x, current_y
 

@@ -5,43 +5,36 @@ Shared MediaPipe Hands wrapper used by every script in this repo.
 
 - findHands() runs detection once per frame and caches each hand as
   {"type", "lmList" {id: (x, y)}, "handNo", "mp_label", "wrist_pos"}; findAllHands() returns that cache.
-- "type" is MediaPipe's handedness label as-is (MediaPipe assumes a mirrored/selfie frame).
-- fingersUp(handNo) / fingersUpForHand(hand) return [thumb, index, middle, ring, pinky] as 0/1.
+- "type" is MediaPipe's handedness label ("Left"/"Right"), whitespace-stripped. MediaPipe assumes a
+  mirrored/selfie frame, so on a cv2.flip(img, 1) frame the label names the physical hand.
+- fingersUp(handNo) / fingersUpForHand(hand) / fingers_up(lmList, type) return [thumb, index, middle, ring, pinky]
+  as 0/1.
 """
 
 import cv2
 import mediapipe as mp
-import numpy as np
 import math
-from dataclasses import dataclass
 from typing import List, Dict, Optional, Tuple
 
+TIP_IDS = [4, 8, 12, 16, 20]  # thumb, index, middle, ring, pinky
 
-@dataclass
-class HandInfo:
-    """Data class to store information about a detected hand."""
-    landmarks: Dict[int, Tuple[int, int]]  # id -> (x, y)
-    raw_landmarks: object  # Original MediaPipe landmarks
-    physical_hand: str  # "Left" or "Right" - the ACTUAL physical hand
-    mp_label: str  # What MediaPipe reported (for debugging)
-    wrist_x: int  # Wrist x-coordinate
-    wrist_y: int  # Wrist y-coordinate
-    hand_index: int  # Index in MediaPipe results
+
+def fingers_up(lm_list: Dict[int, Tuple[int, int]], hand_type: str) -> List[int]:
+    """[thumb, index, middle, ring, pinky] as 0/1 for one hand, palm facing the camera.
+
+    Thumb: MediaPipe's label describes the hand as it looks in the (assumed mirrored) image, so a hand labelled
+    "Right" has its thumb on the image-left side: extended means tip x < IP-joint x ("Left" is the reverse).
+    This holds on flipped and unflipped frames alike because label and geometry mirror together.
+    Other fingers: up when the tip is above (smaller y than) the PIP joint.
+    """
+    tip_x, ip_x = lm_list[TIP_IDS[0]][0], lm_list[TIP_IDS[0] - 1][0]
+    thumb = tip_x < ip_x if hand_type == "Right" else tip_x > ip_x
+    others = [lm_list[tip][1] < lm_list[tip - 2][1] for tip in TIP_IDS[1:]]
+    return [int(thumb)] + [int(f) for f in others]
 
 
 class HandDetector:
-    """
-    Hand Detector class using MediaPipe with robust left/right hand detection.
-    
-    The key insight is that MediaPipe's handedness detection can be unreliable,
-    especially with flipped images. Instead, we use the geometric position of
-    the hand (which side of the screen it's on) to determine which physical
-    hand it is.
-    
-    After cv2.flip(img, 1):
-    - Physical LEFT hand appears on RIGHT side of screen (wrist_x > width/2)
-    - Physical RIGHT hand appears on LEFT side of screen (wrist_x < width/2)
-    """
+    """MediaPipe Hands wrapper: run once per frame with findHands(), then query the cached hands."""
     
     def __init__(self, mode=False, max_num_hands=2, detection_confidence=0.5, track_confidence=0.5):
         self.mode = mode
@@ -101,9 +94,11 @@ class HandDetector:
                 wrist_x, wrist_y = landmarks[0]
 
                 # Determine hand type based on MediaPipe's classification
+                # strip(): the Windows mediapipe 0.10.8 wheel ships handedness.txt with CRLF line endings, so
+                # labels arrive as "Right\r" and every == "Right" comparison silently fails without it.
                 mp_label = "Right"  # Default
                 if self.results.multi_handedness:
-                    mp_label = self.results.multi_handedness[hand_idx].classification[0].label
+                    mp_label = self.results.multi_handedness[hand_idx].classification[0].label.strip()
 
                 # Create hand info dict - use MediaPipe's label directly
                 hand_info = {
@@ -180,33 +175,7 @@ class HandDetector:
             return [0, 0, 0, 0, 0]
 
         hand_info = self._hands_cache[handNo]
-        lm_list = hand_info["lmList"]
-        hand_type = hand_info["type"]
-
-        fingers = []
-
-        # Thumb - Different logic for left and right hands
-        if hand_type == "Right":
-            # For right hand: thumb is up if tip is to the right of IP joint
-            if lm_list[self.tipIds[0]][0] > lm_list[self.tipIds[0] - 1][0]:
-                fingers.append(1)
-            else:
-                fingers.append(0)
-        else:
-            # For left hand: thumb is up if tip is to the left of IP joint
-            if lm_list[self.tipIds[0]][0] < lm_list[self.tipIds[0] - 1][0]:
-                fingers.append(1)
-            else:
-                fingers.append(0)
-
-        # 4 Fingers - Same logic for both hands (tip above PIP joint)
-        for id in range(1, 5):
-            if lm_list[self.tipIds[id]][1] < lm_list[self.tipIds[id] - 2][1]:
-                fingers.append(1)
-            else:
-                fingers.append(0)
-
-        return fingers
+        return fingers_up(hand_info["lmList"], hand_info["type"])
 
     def fingersUpForHand(self, hand_dict: Dict) -> List[int]:
         """
@@ -355,11 +324,6 @@ def main():
             # Draw bounding box with color based on hand type
             color = (255, 0, 0) if hand_type == "Left" else (255, 0, 0)
             detector.findBoundingBox(img, handNo=hand_no, draw=True, color=color)
-            
-            if fingers[0] == 1:
-                fingers[0] = 0
-            else:
-                fingers[0] = 1
             
             # Display hand type and finger count
             finger_count = sum(fingers) if fingers else 0

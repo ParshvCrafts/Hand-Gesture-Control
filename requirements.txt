@@ -1,7 +1,7 @@
 mediapipe==0.10.8
 opencv-contrib-python==4.11.0.86
 numpy==1.26.4
-# Windows-only system control (virtual_mouse, volume_control, mouse_and_volume_control)
-autopy==4.0.1
-pycaw==20251023
-comtypes==1.4.13
+# Windows-only system control (virtual_mouse, volume_control, mouse_and_volume_control); skipped elsewhere
+autopy==4.0.1; sys_platform == "win32"
+pycaw==20251023; sys_platform == "win32"
+comtypes==1.4.13; sys_platform == "win32"

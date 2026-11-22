@@ -14,17 +14,14 @@ pTime = 0
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 folderPath = os.path.join(script_dir, "assets", "fingers")
-myList = os.listdir(folderPath)
+myList = sorted(os.listdir(folderPath))  # 1..9 = that many fingers, 91 = ten, 92 = zero
 overlayList = []
-# print(myList)
 
 for imPath in myList:
     image = cv2.imread(os.path.join(folderPath, imPath))
     overlayList.append(image)
 
 detector = htm.HandDetector(detection_confidence= 0.6)
-
-tipIds = [4, 8, 12, 16, 20]
 
 while True:
     success, img = cap.read()
@@ -39,49 +36,9 @@ while True:
     if allHands:
         # Loop through each detected hand
         for hand in allHands:
-            lmList = hand["lmList"]
-            handType = hand["type"]
-            fingers = []
-            
-            # Thumb detection using MediaPipe's handedness classification
-            # MediaPipe labels hands from camera's perspective (unflipped image):
-            # - "Right" = your physical right hand
-            # - "Left" = your physical left hand
-            if handType == "Right":
-                # Right hand (unflipped): thumb open when tip is LEFT of IP joint
-                if lmList[tipIds[0]][0] < lmList[tipIds[0] - 1][0]:
-                    fingers.append(1)
-                else:
-                    fingers.append(0)
-            else:
-                # Left hand (unflipped): thumb open when tip is RIGHT of IP joint
-                if lmList[tipIds[0]][0] > lmList[tipIds[0] - 1][0]:
-                    fingers.append(1)
-                else:
-                    fingers.append(0)
-            
-            # === ALTERNATIVE: Wrist position based approach (commented out) ===
-            # wrist_x = hand["wrist_pos"][0]
-            # isPhysicalRightHand = wrist_x < 640  # Half of 1280 width
-            # if isPhysicalRightHand:
-            #     if lmList[tipIds[0]][0] > lmList[tipIds[0] - 1][0]:
-            #         fingers.append(1)
-            #     else:
-            #         fingers.append(0)
-            # else:
-            #     if lmList[tipIds[0]][0] < lmList[tipIds[0] - 1][0]:
-            #         fingers.append(1)
-            #     else:
-            #         fingers.append(0)
-
-            # For other Fingers
-            for id in range(1, len(tipIds)):
-                if lmList[tipIds[id]][1] < lmList[tipIds[id] - 2][1]:
-                    fingers.append(1)
-                else:
-                    fingers.append(0)
-            
-            totalFingers += fingers.count(1)
+            # Unflipped frame: MediaPipe's label is the opposite physical hand, but fingers_up's thumb rule
+            # works on the label either way (label and geometry mirror together).
+            totalFingers += sum(htm.fingers_up(hand["lmList"], hand["type"]))
         
         # Display total finger count
         if totalFingers == 10:

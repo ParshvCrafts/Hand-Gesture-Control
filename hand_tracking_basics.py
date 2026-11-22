@@ -51,7 +51,7 @@ class HandDetector:
             
             # Get hand type (Left or Right)
             if self.results.multi_handedness:
-                handType = self.results.multi_handedness[handNo].classification[0].label  # "Left" or "Right"
+                handType = self.results.multi_handedness[handNo].classification[0].label.strip()  # "Left"/"Right" (Windows wheel adds a trailing CR)
             
             for id, lm in enumerate(myHand.landmark):
                 h, w, c = img.shape

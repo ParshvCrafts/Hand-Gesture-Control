@@ -6,13 +6,17 @@ import autopy
 import hand_tracking_module as htm
 from pycaw.pycaw import AudioUtilities
 
-# Camera settings - INCREASED SIZE (960x540 - 16:9 aspect ratio)
+# Requested capture size; the real size is read back below
 wCam, hCam = 2000, 1200
 
 # Initialize the camera
 cap = cv2.VideoCapture(0)
 cap.set(3, wCam)
 cap.set(4, hCam)
+ok, probe = cap.read()  # the camera may not honour the requested size: map gestures over the real frame
+if not ok:
+    raise SystemExit("No frame from webcam 0: check that a camera is connected and not in use by another app.")
+hCam, wCam = probe.shape[:2]
 
 # Initialize hand detector for 2 hands
 detector = htm.HandDetector(max_num_hands=2, detection_confidence=0.7)
@@ -75,7 +79,7 @@ while True:
         lmList = hand["lmList"]
         
         # LEFT HAND (physical) - Volume Control
-        # Note: MediaPipe reports "Right" for physical left hand when image is flipped
+        # The frame is mirrored, so MediaPipe's label is the physical hand
         if handType == "Left":
             current_mode = "volume"
 
@@ -87,25 +91,9 @@ while True:
             x2, y2 = lmList[8]
             cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
 
-            # Check finger states for volume lock gesture
             # Volume only adjusts when: Thumb + Index are up, Middle + Ring + Pinky are down
-            tipIds = [4, 8, 12, 16, 20]
-            fingers = []
-            
-            # Thumb detection for Left hand (MediaPipe label after flip)
-            # MediaPipe "Left" label with flipped image: thumb open when tip is RIGHT of IP joint
-            if lmList[tipIds[0]][0] > lmList[tipIds[0] - 1][0]:
-                fingers.append(1)
-            else:
-                fingers.append(0)
-            
-            # Other 4 fingers - tip above PIP joint means finger is up
-            for id in range(1, 5):
-                if lmList[tipIds[id]][1] < lmList[tipIds[id] - 2][1]:
-                    fingers.append(1)
-                else:
-                    fingers.append(0)
-            
+            fingers = detector.fingersUp(handNo=handNo)
+
             # Pinch gesture: thumb up, index up, other fingers down
             # fingers = [thumb, index, middle, ring, pinky]
             is_pinch_gesture = (fingers[0] == 1 and fingers[1] == 1 and 
@@ -127,7 +115,7 @@ while True:
                 if length < 40:
                     cv2.circle(img, (cx, cy), 10, (0, 0, 255), cv2.FILLED)
 
-                # Map distance to volume (30-250 pixels -> minVol to maxVol)
+                # Map distance to volume (30-200 pixels -> minVol to maxVol)
                 vol = np.interp(length, [30, 200], [minVol, maxVol])
                 # SCALED volume bar position - maintain proportional positioning
                 volBar = np.interp(length, [30, 200], [int(0.741 * hCam), int(0.278 * hCam)])  # ~400->150 scaled
@@ -149,7 +137,6 @@ while True:
                 cv2.putText(img, "VOLUME: LOCKED", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 165, 255), 2)
 
         # RIGHT HAND (physical) - Mouse Control
-        # Note: MediaPipe reports "Left" for physical right hand when image is flipped
         elif handType == "Right":
             current_mode = "mouse"
 
@@ -181,7 +168,7 @@ while True:
                     current_y = prev_y + (index_tip_y - prev_y) / smooth
 
                     # Move the mouse (direct mapping - no flip)
-                    autopy.mouse.move(current_x, current_y)
+                    autopy.mouse.move(min(current_x, screen_width - 1), min(current_y, screen_height - 1))  # autopy rejects off-screen points
                     cv2.circle(img, (x1, y1), 12, (0, 0, 255), cv2.FILLED)
                     prev_x, prev_y = current_x, current_y
 
